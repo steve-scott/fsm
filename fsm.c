@@ -6,23 +6,103 @@
  *
  *
  */
-
+#define FSM_ENUM	// we only use the framework's defined events in this file
 #include "fsm.h"
 
-FsmEvent fsmNullEvent = {id : EVT_FSM_NULL, pfnEvtHandler : NULL};
+FsmEvent fsmNullEvent = {DESIG_INIT(id,EVT_FSM_NULL), DESIG_INIT(pfnEvtHandler,NULL)};
 
 /**************************************************************************************************/
 // C implementation of OOP Hierarchical State Machine class
 /**************************************************************************************************/
+
+/**************************************************************************************************/
+int FsmDeferEvent(Fsm* pFsm, int eventId)
+{
+	int result = FsmPutEvent(pFsm->deferQ, eventId);
+
+	return result;
+}
+
+/**************************************************************************************************/
+int FsmRecallEvent(Fsm* pFsm, int *pEventId)
+{
+	int result;
+
+	*pEventId = FsmGetEvent(pFsm->deferQ);
+	result = FsmPutEvent(pFsm->recallQ, *pEventId);
+
+	return result;
+}
+
+/**************************************************************************************************/
+// Move an event to a queue
+// Returns -1 if queue is full, else 0
+int FsmPutEvent (FsmQ *q, int eventId)
+{
+	if (NULL == q)
+		return 0;
+
+	if (EVT_FSM_NULL == eventId)	// no event
+		return 0;
+
+	if (q->count >= q->size)	// queue full
+	{
+		FSM_LOG("Recall queue full - put event %d in queue failed", eventId);
+		return -1;
+	}
+
+	q->eventId[q->tail++] = eventId;
+	q->count++;
+
+	if (q->tail >= q->size)
+		q->tail = 0;
+
+	return 0;
+
+} // FsmPutEvent
+
+/**************************************************************************************************/
+// Retrieves an event from a queue.
+// returns EVT_FSM_NULL if no events in the queue, else the next eventId in the queue
+int FsmGetEvent (FsmQ *q)
+{
+	int	eventId;
+
+	if (NULL == q)
+		return EVT_FSM_NULL;
+
+	if (q->count <= 0)
+		return EVT_FSM_NULL;
+
+	eventId = q->eventId[q->head++];
+	q->count--;
+
+	if (q->head >= q->size)
+		q->head = 0;
+
+	return eventId;
+
+} // FsmGetEvent
+
+/**************************************************************************************************/
 FsmEvent * FsmFindEvent( FsmEvent** pEventList, int eventId )
 {
-	int			i=0;
+	int		i=0;
+	int		defaultEvt = -1;
 
-	while ((int)pEventList[i]->id != (int)EVT_FSM_NULL)
+	while (pEventList[i]->id != EVT_FSM_NULL)
 	{
 		if (pEventList[i]->id == eventId)
 			break;
+		else if (pEventList[i]->id == EVT_FSM_DEFAULT)
+			defaultEvt = i;
 		i++;
+	}
+
+	if ( (pEventList[i]->id == EVT_FSM_NULL) && (defaultEvt >= 0) )
+	{
+		i = defaultEvt;
+		pEventList[i]->altId = eventId;
 	}
 
 	return pEventList[i];
@@ -33,6 +113,9 @@ bool FsmDispatch(Fsm *pFsm, int eventId)
 {
 	bool 		consumed;
 	FsmStatePtr pState = pFsm->pState;
+
+	if (EVT_FSM_NULL == eventId)	// no event
+		return true;
 
 	if (NULL == pFsm)
 	{
@@ -112,7 +195,7 @@ bool FsmStateDefaultHandler(FsmState *pState, int eventId)
 
 	// Handle non-ENTRY events not consumed by the substate
 	// NB: EXIT events are handled in bottom-up order
-	if ( (!consumed) && (pEvent->id == eventId) && (!isEntry) )
+	if ( (!consumed) && (pEvent->id != EVT_FSM_NULL) && (!isEntry) )
 	{
 		pNextState = (pfnEventHandler == NULL ? NULL : (*pfnEventHandler)(pState, pEvent) );
 		// ignore transitions in Exit actions (or else we'll wind up in an infinite recursive loop...)
@@ -143,5 +226,25 @@ void FsmInit (Fsm *pFsm, FsmState *pState)
 
 } // FsmInit
 
+/**************************************************************************************************/
+void FsmRun(Fsm *pFsm, int eventId)
+{
+	bool	consumed;
+	int		nextEvent = eventId;
+
+	do {
+		consumed = FsmDispatch(pFsm, nextEvent);
+		if (!consumed)
+		{
+			FSM_LOG("%s,%s,%d,ignored", pFsm->name, pFsm->pState->name, nextEvent);
+		}
+
+		// look for any any deferred events that have been recalled
+		nextEvent = FsmGetEvent(pFsm->recallQ);
+
+	} while (nextEvent != EVT_FSM_NULL);
+	
+
+} // CoordFsmRun
 
 
