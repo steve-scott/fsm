@@ -27,7 +27,7 @@
     <ClInclude Include="..\..\fsm.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="..\..\fsm_example_events.h">
+    <ClInclude Include="..\..\fsm_events.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

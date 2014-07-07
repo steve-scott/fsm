@@ -18,7 +18,7 @@ void MyFsmRun(int eventId);
 void PrintMyEventMenu(void);
 bool SendEvent (int choice);
 
-FILE * csvFile;
+FILE * csvFile = NULL;
 
 #ifdef __cplusplus
 }
@@ -102,8 +102,6 @@ DWORD WINAPI TopFsmThread( LPVOID lpParam )
 
 	PeekMessage(&msg, NULL, WM_USER, WM_USER, PM_NOREMOVE);
 	SetEvent(hTopFsmThreadReady);
-
-	MyFsmInit();
 
 	while (1)
 	{

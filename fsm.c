@@ -6,7 +6,7 @@
  *
  *
  */
-#define FSM_ENUM	// we only use the framework's defined events in this file
+#define _FSM_C_
 #include "fsm.h"
 
 FsmEvent fsmNullEvent = {DESIG_INIT(id,EVT_FSM_NULL), DESIG_INIT(pfnEvtHandler,NULL)};
@@ -236,7 +236,10 @@ void FsmRun(Fsm *pFsm, int eventId)
 		consumed = FsmDispatch(pFsm, nextEvent);
 		if (!consumed)
 		{
-			FSM_LOG("%s,%s,%d,ignored", pFsm->name, pFsm->pState->name, nextEvent);
+			if (nextEvent >= EVT_FSM_EOL)
+				FSM_LOG("%s,%s,%d,ignored", pFsm->name, pFsm->pState->name, nextEvent)
+			else
+				FSM_LOG("%s,%s,%s,ignored", pFsm->name, pFsm->pState->name, FSM_EVT_NAME(nextEvent))
 		}
 
 		// look for any any deferred events that have been recalled

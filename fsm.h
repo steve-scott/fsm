@@ -33,6 +33,70 @@ extern "C" {
 /**************************************************************************************************/
 // Base class event list
 
+// The framework defines a base set of event identifiers. Normally you'll have
+// additional event IDs for your state machines. Recommended practice is just
+// to have a single list of event IDs for your whole system. This has two advantages:
+//     1) each ID in the system is unique,
+// and 2) you get the whole list in a single enum for stronger type checking
+
+// This really helps when debugging (like when you send an event to the wrong
+// thread or state machine).
+
+// You have several options for defining your event IDs:
+//   1) Create a macro symbol named FSM_USER_EVENTS in the FSM user include file fsm_events.h
+//      The macro has the form:
+//			#define FSM_USER_EVENTS			\
+//				FSM_EVENT_ID(EVT_1),		\
+//				FSM_EVENT_ID(EVT_2),		\
+//				FSM_EVENT_ID(EVT_3),		\
+//				FSM_EVENT_ID(EVT_4)
+//      Define as many events as you want. Substitute your event id symbols for EVT_1, etc.
+//      The framework creates the eFsmEvent enum with your identifiers as the enum symbols,
+//      along with the framework's base set of event identifiers.
+//
+//      The framework also creates an identifier name array with strings that have the same name
+//      as the enum event id symbols. Your code can get the string identifier for each event id
+//      by using
+//              FSM_EVT_NAME(x)
+//      where x is the identifier symbol (e.g., EVT_1, etc.) The list includes the framework's
+//      base set of identifiers.
+//
+//      Your identifiers will lie in the range 0 < your_identifiers < EVT_FSM_EOL .
+//      Identifier values are enums, auto incrementing in the order you define them. The
+//      minimum value is not specified, but will be greater than 0.
+//
+//      This also gives the framework access to your identifiers for debug messages.
+//
+//   2) Don't define FSM_USER_EVENTS in fsm_events.h . Include fsm.h in your soucce file, then
+//     define your identifiers so that they are all >= EVT_FSM_EOL. You can have different lists
+//     for each thread or state machine, you just can't use any values below EVT_FSM_EOL.
+//     For example
+//            typedef enum {
+//                MY_EVT_1 = EVT_FSM_EOL,
+//                MY_EVT_2,					// etc...
+//            } MyEventsA;
+//
+//            typedef enum {
+//                MY_EVT_3 = EVT_FSM_EOL,
+//                MY_EVT_4,					// etc...
+//            } MyEventsB;
+//
+//      Your identifiers will all be positive numbers. You may not have system-wide unique
+//      event ids depending on how you define them (e.g. in the example above IDs are not unique).
+//
+//      Your identifiers will NOT be in the framework's identifier name string array. Do NOT use
+//      FSM_EVT_NAME(x) with your identifiers - at best you will get garbage, at worst
+//      your system will crash inexplicably at random times.
+//
+//      Using this method, the framework will not have access to any event ID names for
+//      your events.
+
+// Define the event identifier lists
+#include "fsm_events.h"		// user should define FSM_USER_EVENTS in here
+#ifndef FSM_USER_EVENTS
+	#define FSM_USER_EVENTS FSM_EVENT_ID(EVT_USER)
+#endif
+
 #define FSM_NON_EVENTS   \
    FSM_EVENT_ID(EVT_FSM_NULL)  FSM_EVENT_ID_VAL(-1)
 
@@ -43,40 +107,36 @@ extern "C" {
 	FSM_EVENT_ID(EVT_FSM_SUPERSTATE_EXIT),             \
 	FSM_EVENT_ID(EVT_FSM_DEFAULT)
 
-// Normally you'll have additional IDs for your state machines.
-// Recommended practice is just to have a single list of event IDs for your whole
-// system, so each ID in the system is unique. This really helps when debugging
-// (like when you send an event to the wrong thread or state machine). So copy the
-// enum below into the fsm_events.h file, add your own event ids, and define
-// FSM_EVENT_ID and FSM_EVENT_ID_VAL as shown.
-// Or you can put them here and define FSM_ENUM.
-#ifdef FSM_ENUM
-
-#undef FSM_EVENT_ID
-#undef FSM_EVENT_ID_VAL
+#undef  FSM_EVENT_ID
+#undef  FSM_EVENT_ID_VAL
 #define FSM_EVENT_ID(x)        x
 #define FSM_EVENT_ID_VAL(x)  =(x)
 typedef enum
 {
 	FSM_NON_EVENTS,			// These must be first!!!
 	FSM_STD_EVENTS,			// These must be second!!!
-	//------ put your events here -------
-	//------ new entries above here -----
+	//------ put user events here -------
+	FSM_USER_EVENTS,
+	//------ user entries above here -----
 	EVT_FSM_EOL			// keep this last
 } eFsmEvent;
 
-// To turn the symbol name into a string (for example to create an array of strings
-// of the event ID enum symbols), use these definitions:
-//		#define FSM_EVENT_ID(x)        #x
-//		#define FSM_EVENT_ID_VAL(x)
+// Create the event name list
+#undef  FSM_EVENT_ID
+#undef  FSM_EVENT_ID_VAL
+#define FSM_EVENT_ID(x)        #x
+#define FSM_EVENT_ID_VAL(x)
 
-#else
-#ifndef FSM_EVENT_FILE
-#define FSM_EVENT_FILE "fsm_events.h"
+extern const char * gFsmEventNames[];
+#ifdef _FSM_C_
+const char * gFsmEventNames[] = {
+		FSM_STD_EVENTS,			// These must be first!!! Don't include the FSM_NON_EVENTS, they have values < 0 !!
+		FSM_USER_EVENTS
+};
 #endif
-#include FSM_EVENT_FILE
 
-#endif // FSM_ENUM
+#define FSM_EVT_NAME(x) gFsmEventNames[x]
+
 
 // Finite State Machine base class
 typedef struct Fsm Fsm;
@@ -148,17 +208,13 @@ void	TestFsm(void);
 #ifndef FSM_LOG
 #include <stdio.h>
 	#if defined(_WIN32)
-		#if (FSM_LOG_FILE)
-			extern FILE * csvFile;
-			#define FSM_LOG(format, ...)	{									\
-				printf( "%s,"format"\n", __FUNCTION__, ##__VA_ARGS__);			\
+		extern FILE * csvFile;
+		#define FSM_LOG(format, ...)											\
+		{																		\
+			printf( "%s,"format"\n", __FUNCTION__, ##__VA_ARGS__);				\
+			if (csvFile != NULL)												\
 				fprintf(csvFile, "%s,"format"\n", __FUNCTION__, ##__VA_ARGS__);	\
-				}
-		#else
-		#define FSM_LOG(format, ...)	{										\
-			printf( "%s,"format"\n\r", __FUNCTION__, ##__VA_ARGS__);			\
-			}
-		#endif
+		}
 	#elif defined(__GNUC__)
 		#define FSM_LOG(format, ...)	{printf( "%s,"format"\n\r", __func__, ##__VA_ARGS__);}
 	#else

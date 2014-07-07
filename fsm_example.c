@@ -2,7 +2,6 @@
 #define	FSM_TRACE		1	// undefine or set to 0 to disable fsm tracing
 #define _FSM_EXAMPLE_C_
 
-#define FSM_EVENT_FILE "fsm_example_events.h"
 #include "fsm.h"
 
 void MyFsmInit (void);
@@ -59,14 +58,14 @@ FsmEvent* eventList_Nested1State2[] = {
 //++++ Nested FSM 2 State 1 events ++++
 
 // Method prototypes
-FSM_EVENT_HANDLER( Nested_2State1_Entry );
-FSM_EVENT_HANDLER( Nested_2State1_EVT3  );
+FSM_EVENT_HANDLER( Nested2_State1_Entry );
+FSM_EVENT_HANDLER( Nested2_State1_EVT3  );
 
 // Objects
 // note superstate entry events are treated just like normal entry events
-FSM_EVENT( evt_Nested2State1_Entry,           EVT_FSM_ENTRY,             Nested_2State1_Entry );
-FSM_EVENT( evt_Nested2State1_SuperstateEntry, EVT_FSM_SUPERSTATE_ENTRY,  Nested_2State1_Entry );
-FSM_EVENT( evt_Nested2State1_EVT3,            EVT_3,                     Nested_2State1_EVT3  );
+FSM_EVENT( evt_Nested2State1_Entry,           EVT_FSM_ENTRY,             Nested2_State1_Entry );
+FSM_EVENT( evt_Nested2State1_SuperstateEntry, EVT_FSM_SUPERSTATE_ENTRY,  Nested2_State1_Entry );
+FSM_EVENT( evt_Nested2State1_EVT3,            EVT_3,                     Nested2_State1_EVT3  );
 
 // Event list array
 FsmEvent* eventList_Nested2State1[] = {
@@ -185,7 +184,7 @@ FSM_EVENT_HANDLER( Nested1_State1_Entry )
 	return NULL;
 }
 
-FSM_EVENT_HANDLER( Nested_2State1_Entry )
+FSM_EVENT_HANDLER( Nested2_State1_Entry )
 {
 	FSM_RUN_LOG("%s,%s,entry_actions", pState->pFsm->name, pState->name);
 	pEvent->consumed = true;
@@ -194,7 +193,7 @@ FSM_EVENT_HANDLER( Nested_2State1_Entry )
 
 FSM_EVENT_HANDLER( Nested1_State1_EVT3 ) { pEvent->consumed = true; return &state_Nested1State2; }
 FSM_EVENT_HANDLER( Nested1_State2_EVT4 ) { pEvent->consumed = true; return &state_Nested1State1; }
-FSM_EVENT_HANDLER( Nested_2State1_EVT3 ) { pEvent->consumed = true; return &state_Nested2State2; }
+FSM_EVENT_HANDLER( Nested2_State1_EVT3 ) { pEvent->consumed = true; return &state_Nested2State2; }
 FSM_EVENT_HANDLER( Nested2_State2_EVT4 ) { pEvent->consumed = true; return &state_Nested2State1; }
 
 
