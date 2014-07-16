@@ -10,6 +10,8 @@
 #ifndef _FSM_H_
 #define _FSM_H_
 
+#define	FSM_TEST	1	// set to 0 to disable test functions and objects
+
 #ifndef __cplusplus
 typedef unsigned char	bool;
 #define	true			1
@@ -44,12 +46,15 @@ extern "C" {
 
 // You have several options for defining your event IDs:
 //   1) Create a macro symbol named FSM_USER_EVENTS in the FSM user include file fsm_events.h
+#if 0
 //      The macro has the form:
-//			#define FSM_USER_EVENTS			\
-//				FSM_EVENT_ID(EVT_1),		\
-//				FSM_EVENT_ID(EVT_2),		\
-//				FSM_EVENT_ID(EVT_3),		\
-//				FSM_EVENT_ID(EVT_4)
+			#define FSM_USER_EVENTS		\
+				FSM_EVENT_ID(EVT_1)		\
+				FSM_EVENT_ID(EVT_2)		\
+				FSM_EVENT_ID(EVT_3)		\
+				FSM_EVENT_ID(EVT_4)
+//
+#endif
 //      Define as many events as you want. Substitute your event id symbols for EVT_1, etc.
 //      The framework creates the eFsmEvent enum with your identifiers as the enum symbols,
 //      along with the framework's base set of event identifiers.
@@ -97,43 +102,37 @@ extern "C" {
 	#define FSM_USER_EVENTS FSM_EVENT_ID(EVT_USER)
 #endif
 
-#define FSM_NON_EVENTS   \
-   FSM_EVENT_ID(EVT_FSM_NULL)  FSM_EVENT_ID_VAL(-1)
-
-#define FSM_STD_EVENTS                                 \
-	FSM_EVENT_ID(EVT_FSM_ENTRY) FSM_EVENT_ID_VAL(0),   \
-	FSM_EVENT_ID(EVT_FSM_EXIT),                        \
-	FSM_EVENT_ID(EVT_FSM_SUPERSTATE_ENTRY),            \
-	FSM_EVENT_ID(EVT_FSM_SUPERSTATE_EXIT),             \
+#define FSM_STD_EVENTS                       \
+	FSM_EVENT_ID(EVT_FSM_ENTRY)              \
+	FSM_EVENT_ID(EVT_FSM_EXIT)               \
+	FSM_EVENT_ID(EVT_FSM_SUPERSTATE_ENTRY)   \
+	FSM_EVENT_ID(EVT_FSM_SUPERSTATE_EXIT)    \
 	FSM_EVENT_ID(EVT_FSM_DEFAULT)
 
 #undef  FSM_EVENT_ID
-#undef  FSM_EVENT_ID_VAL
-#define FSM_EVENT_ID(x)        x
-#define FSM_EVENT_ID_VAL(x)  =(x)
+#define FSM_EVENT_ID(x)        x,
 typedef enum
 {
-	FSM_NON_EVENTS,			// These must be first!!!
-	FSM_STD_EVENTS,			// These must be second!!!
+	EVT_FSM_NULL = -1,		// This must be first!!!
+	FSM_STD_EVENTS			// These must be second!!!
 	//------ put user events here -------
-	FSM_USER_EVENTS,
+	FSM_USER_EVENTS
 	//------ user entries above here -----
 	EVT_FSM_EOL			// keep this last
 } eFsmEvent;
 
 // Create the event name list
 #undef  FSM_EVENT_ID
-#undef  FSM_EVENT_ID_VAL
-#define FSM_EVENT_ID(x)        #x
-#define FSM_EVENT_ID_VAL(x)
+#define FSM_EVENT_ID(x)        #x ,
 
 extern const char * gFsmEventNames[];
 #ifdef _FSM_C_
 const char * gFsmEventNames[] = {
-		FSM_STD_EVENTS,			// These must be first!!! Don't include the FSM_NON_EVENTS, they have values < 0 !!
+		FSM_STD_EVENTS			// These must be first!!!
 		FSM_USER_EVENTS
+		"EVT_FSM_EOL"
 };
-#endif
+#endif //_FSM_C_
 
 #define FSM_EVT_NAME(x) gFsmEventNames[x]
 
@@ -162,6 +161,7 @@ struct FsmState
 	FsmEvent**		eventList;		// Array of event pointers handled by this state
 	const char* 	name;
 	FsmStateHandler	pfnStateHandler;
+	int				notifyEventId;
 	FsmStatePtr		pNextState;
 };
 
@@ -175,6 +175,7 @@ struct FsmEvent
 	int 			altId;		// used by FSM to store real id when processing "default" event
 								// don't set this field! Read it when handling a EVT_FSM_DEFAULT event
 };
+
 
 // Base class methods
 void FsmInit (Fsm *pFsm, FsmState *pState);
@@ -229,8 +230,8 @@ void	TestFsm(void);
 
 #if FSM_TRACE
 	#define FSM_RUN_LOG(format, ...)	FSM_LOG("run,"format, ##__VA_ARGS__)
-	#define FSM_ENTER_LOG(format, ...)	FSM_LOG("enter,"format, ##__VA_ARGS__)
-	#define FSM_EXIT_LOG(format, ...)	FSM_LOG("exit,"format, ##__VA_ARGS__)
+	#define FSM_ENTER_LOG(format, ...)	FSM_LOG("begin,"format, ##__VA_ARGS__)
+	#define FSM_EXIT_LOG(format, ...)	FSM_LOG("end,"format, ##__VA_ARGS__)
 #else
 	#define FSM_RUN_LOG(format, ...)	{;}
 	#define FSM_ENTER_LOG(format, ...)	{;}
@@ -274,7 +275,8 @@ void	TestFsm(void);
 		DESIG_INIT(nestedFsmList,nested_fsm_list),	\
 		DESIG_INIT(eventList,event_list),			\
 		DESIG_INIT(name,name_str),					\
-		DESIG_INIT(pfnStateHandler,handler)			\
+		DESIG_INIT(pfnStateHandler,handler),		\
+		DESIG_INIT(notifyEventId,EVT_FSM_NULL)		\
 		}
 
 // ... Event Queues
@@ -288,6 +290,69 @@ void	TestFsm(void);
 	} obj = { qsize, 0, 0, 0 };
 
 #define FSM_Q_INIT(obj)	{ obj.head = 0; obj.tail = 0; obj.count = 0;}
+
+// Create the event insertion queues for testing
+#if !FSM_TEST
+	#define FSM_INSERT_BEFORE(pFsm,x)
+	#define FSM_INSERT_AFTER(pFsm,x)
+	#define FSM_NOTIFY(pState,x)
+	#define FSM_SET_NOTIFY_FCN(x)
+	#define FSM_CLR_NOTIFY_FCN()
+	#define FSM_SET_NOTIFY_EVENT(pState,x)
+	#define FSM_CLR_NOTIFY_EVENT(pState)
+#else
+	#define FSM_MAX_INSERT_EVENTS	8
+
+	int FsmInsertBefore(eFsmEvent eventId, eFsmEvent insertId);
+	int FsmInsertAfter(eFsmEvent eventId, eFsmEvent insertId);
+	void FsmNotify(void);
+
+	#define FSM_INSERT_BEFORE(pFsm,x)	FsmDoInsertedBefore(pFsm,x)
+	#define FSM_INSERT_AFTER(pFsm,x)	FsmDoInsertedAfter(pFsm,x)
+	#define FSM_NOTIFY(pState,x)		if (pState->notifyEventId == x) (*gpNotifyFcn)()
+	#define FSM_SET_NOTIFY_FCN(x)		gpNotifyFcn = x
+	#define FSM_CLR_NOTIFY_FCN()		gpNotifyFcn = FsmNotify
+	#define FSM_SET_NOTIFY_EVENT(pState,x)	pState->notifyEventId = x
+	#define FSM_CLR_NOTIFY_EVENT(pState)	pState->notifyEventId = EVT_FSM_NULL
+
+	extern FsmQ * gFsmQInsertBefore[];
+	extern FsmQ * gFsmQInsertAfter[];
+
+	typedef void (*FsmNotifyFcn)(void);		// this is called when state sees a specified event
+	extern FsmNotifyFcn	gpNotifyFcn;
+
+	#ifdef _FSM_C_
+		FsmNotifyFcn	gpNotifyFcn = FsmNotify;
+		// instantiate the queues
+		#undef  FSM_EVENT_ID
+		#define FSM_EVENT_ID(x)        FSM_Q(fsmQ_insertBefore_##x,FSM_MAX_INSERT_EVENTS)
+		FSM_STD_EVENTS
+		FSM_USER_EVENTS
+
+		#undef  FSM_EVENT_ID
+		#define FSM_EVENT_ID(x)        FSM_Q(fsmQ_insertAfter_##x,FSM_MAX_INSERT_EVENTS)
+		FSM_STD_EVENTS
+		FSM_USER_EVENTS
+
+		// instantiate the arrays
+		#undef  FSM_EVENT_ID
+		#define FSM_EVENT_ID(x)        (FsmQ *)&fsmQ_insertBefore_##x,
+
+		FsmQ * gFsmQInsertBefore[] = {
+				FSM_STD_EVENTS			// These must be first!!!
+				FSM_USER_EVENTS
+		};
+
+		#undef  FSM_EVENT_ID
+		#define FSM_EVENT_ID(x)        (FsmQ *)&fsmQ_insertAfter_##x,
+
+		FsmQ * gFsmQInsertAfter[] = {
+				FSM_STD_EVENTS			// These must be first!!!
+				FSM_USER_EVENTS
+		};
+
+	#endif //_FSM_C_
+#endif // FSM_TEST
 
 #ifdef __cplusplus
 }

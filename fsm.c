@@ -16,6 +16,80 @@ FsmEvent fsmNullEvent = {DESIG_INIT(id,EVT_FSM_NULL), DESIG_INIT(pfnEvtHandler,N
 /**************************************************************************************************/
 
 /**************************************************************************************************/
+// begin test functions
+/**************************************************************************************************/
+// Functions used only for testing
+
+#if FSM_TEST
+/**************************************************************************************************/
+int FsmInsertBefore(eFsmEvent eventId, eFsmEvent insertId)
+{
+	FsmQ	*pQ = gFsmQInsertBefore[eventId];
+	int		result = FsmPutEvent(pQ, insertId);
+	return	result;
+}
+
+/**************************************************************************************************/
+int FsmInsertAfter(eFsmEvent eventId, eFsmEvent insertId)
+{
+	FsmQ	*pQ = gFsmQInsertAfter[eventId];
+	int		result = FsmPutEvent(pQ, insertId);
+	return	result;
+}
+
+/**************************************************************************************************/
+void FsmDoInsertedEvents(FsmQ *pQ, Fsm *pFsm, int eventId)
+{
+	int	 insertEvent;
+
+	while ((insertEvent = FsmGetEvent(pQ)) != EVT_FSM_NULL)
+	{
+		if (!FsmDispatch(pFsm, insertEvent))
+			FSM_LOG("%s,%s,%s,ignored", pFsm->name, pFsm->pState->name, FSM_EVT_NAME(insertEvent))
+	}
+}
+
+/**************************************************************************************************/
+void FsmDoInsertedBefore(Fsm *pFsm, int eventId)
+{
+	FsmQ *pQ;
+
+	if (eventId >= EVT_FSM_EOL)
+		return;
+
+	pQ = gFsmQInsertBefore[eventId];
+
+	FsmDoInsertedEvents(pQ, pFsm, eventId);
+
+}
+
+/**************************************************************************************************/
+void FsmDoInsertedAfter(Fsm *pFsm, int eventId)
+{
+	FsmQ *pQ;
+
+	if (eventId >= EVT_FSM_EOL)
+		return;
+
+	pQ = gFsmQInsertAfter[eventId];
+
+	FsmDoInsertedEvents(pQ, pFsm, eventId);
+}
+
+/**************************************************************************************************/
+// default notify function does nothing
+void FsmNotify(void)
+{
+}
+
+#endif // FSM_TEST
+
+/**************************************************************************************************/
+// end test functions
+/**************************************************************************************************/
+
+
+/**************************************************************************************************/
 int FsmDeferEvent(Fsm* pFsm, int eventId)
 {
 	int result = FsmPutEvent(pFsm->deferQ, eventId);
@@ -161,6 +235,8 @@ bool FsmStateDefaultHandler(FsmState *pState, int eventId)
 	bool			consumed = false;
 	bool			isEntry = (EVT_FSM_ENTRY == eventId) || (EVT_FSM_SUPERSTATE_ENTRY == eventId);
 
+	FSM_NOTIFY(pState, eventId);
+
 	pEvent = FsmFindEvent( pState->eventList, eventId );	// returns pEvent->id == EVT_FSM_NULL if no handler found		
 	pfnEventHandler = pEvent->pfnEvtHandler;
 	pEvent->consumed = false;
@@ -232,14 +308,16 @@ void FsmRun(Fsm *pFsm, int eventId)
 	bool	consumed;
 	int		nextEvent = eventId;
 
+	FSM_INSERT_BEFORE(pFsm, eventId);
+
 	do {
 		consumed = FsmDispatch(pFsm, nextEvent);
 		if (!consumed)
 		{
 			if (nextEvent >= EVT_FSM_EOL)
-				FSM_LOG("%s,%s,%d,ignored", pFsm->name, pFsm->pState->name, nextEvent)
+				FSM_LOG(",%s,%s,%d,ignored", pFsm->name, pFsm->pState->name, nextEvent)
 			else
-				FSM_LOG("%s,%s,%s,ignored", pFsm->name, pFsm->pState->name, FSM_EVT_NAME(nextEvent))
+				FSM_LOG(",%s,%s,%s,ignored", pFsm->name, pFsm->pState->name, FSM_EVT_NAME(nextEvent))
 		}
 
 		// look for any any deferred events that have been recalled
@@ -247,7 +325,6 @@ void FsmRun(Fsm *pFsm, int eventId)
 
 	} while (nextEvent != EVT_FSM_NULL);
 	
+	FSM_INSERT_AFTER(pFsm, eventId);
 
 } // CoordFsmRun
-
-
